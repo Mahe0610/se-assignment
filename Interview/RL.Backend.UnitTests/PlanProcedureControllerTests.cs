@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -82,6 +83,50 @@ public class PlanProcedureControllerTests
         result.Should().BeOfType<NoContentResult>();
         (await context.PlanProcedureUsers.AnyAsync(ppu => ppu.PlanId == 7 && ppu.ProcedureId == 8))
             .Should().BeFalse();
+    }
+
+
+    [TestMethod]
+    public async Task Get_ResultCanBeSerializedWithoutCycleErrors()
+    {
+        var context = DbContextHelper.CreateContext();
+        await SeedPlanProcedureAsync(context, planId: 15, procedureId: 16, userIds: new[] { 2, 4 });
+        var sut = CreateSut(context);
+
+        var result = await sut.Get().FirstAsync(pp => pp.PlanId == 15 && pp.ProcedureId == 16);
+        var serialize = () => JsonSerializer.Serialize(result);
+
+        serialize.Should().NotThrow();
+    }
+
+    [TestMethod]
+    public async Task AssignUser_ResultCanBeSerializedWithoutCycleErrors()
+    {
+        var context = DbContextHelper.CreateContext();
+        await SeedPlanProcedureAsync(context, planId: 21, procedureId: 22, userIds: Array.Empty<int>());
+        if (!await context.Users.AnyAsync(u => u.UserId == 5))
+        {
+            context.Users.Add(new User
+            {
+                UserId = 5,
+                Name = "User 5"
+            });
+            await context.SaveChangesAsync();
+        }
+
+        var sut = CreateSut(context);
+        var actionResult = await sut.AssignUser(new AssignUserToPlanProcedureRequest
+        {
+            PlanId = 21,
+            ProcedureId = 22,
+            UserId = 5
+        }, CancellationToken.None);
+
+        var okResult = actionResult.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var assignment = okResult.Value.Should().BeOfType<PlanProcedureUser>().Subject;
+        var serialize = () => JsonSerializer.Serialize(assignment);
+
+        serialize.Should().NotThrow();
     }
 
     [TestMethod]

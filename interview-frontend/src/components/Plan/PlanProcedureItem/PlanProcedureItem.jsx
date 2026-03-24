@@ -8,7 +8,6 @@ const PlanProcedureItem = ({
   onRemoveAssignedUser,
   onClearAssignedUsers,
 }) => {
-  const procedureId = planProcedure.planProcedureId || planProcedure.procedureId;
   const selectedUsers = planProcedure.assignments.map((assignment) => ({
     label: assignment.name,
     value: assignment.userId,
@@ -21,9 +20,7 @@ const PlanProcedureItem = ({
           <div className="plan-procedure-title">{planProcedure.procedure?.procedureTitle || "Procedure"}</div>
           <div className="text-muted small mt-1">
             {planProcedure.assignments.length > 0
-              ? `${planProcedure.assignments.length} user${
-                  planProcedure.assignments.length === 1 ? "" : "s"
-                } assigned`
+              ? `${planProcedure.assignments.length} user${planProcedure.assignments.length === 1 ? "" : "s"} assigned`
               : "No users assigned yet"}
           </div>
         </div>
@@ -31,7 +28,7 @@ const PlanProcedureItem = ({
           type="button"
           className="btn btn-outline-danger btn-sm"
           disabled={planProcedure.assignments.length === 0}
-          onClick={() => onClearAssignedUsers(procedureId)}
+          onClick={() => onClearAssignedUsers(planProcedure)}
         >
           Remove All Users
         </button>
@@ -47,7 +44,7 @@ const PlanProcedureItem = ({
         options={users}
         value={selectedUsers}
         onChange={(nextSelectedUsers) =>
-          onAssignUsers(procedureId, nextSelectedUsers || [], planProcedure.assignments)
+          onAssignUsers(planProcedure, nextSelectedUsers || [], planProcedure.assignments)
         }
       />
 
@@ -55,14 +52,14 @@ const PlanProcedureItem = ({
         {planProcedure.assignments.length > 0 ? (
           planProcedure.assignments.map((assignedUser) => (
             <div
-              key={`${procedureId}-${assignedUser.userId}`}
+              key={`${planProcedure.planId}-${planProcedure.procedureId}-${assignedUser.userId}`}
               className="assigned-user-chip"
             >
               <span>{assignedUser.name}</span>
               <button
                 type="button"
                 className="btn btn-link btn-sm assigned-user-remove"
-                onClick={() => onRemoveAssignedUser(procedureId, assignedUser)}
+                onClick={() => onRemoveAssignedUser(planProcedure, assignedUser)}
               >
                 Remove
               </button>

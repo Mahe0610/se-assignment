@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   addProcedureToPlan,
@@ -6,40 +6,14 @@ import {
   createProcedureAssignment,
   deleteProcedureAssignment,
   getPlanProcedures,
-  getProcedureAssignments,
   getProcedures,
-  getStoredAssignmentUserIds,
   getUsers,
 } from "../../api/api";
 import Layout from "../Layout/Layout";
 import ProcedureItem from "./ProcedureItem/ProcedureItem";
 import PlanProcedureItem from "./PlanProcedureItem/PlanProcedureItem";
 
-const getEmbeddedAssignments = (planProcedure) => {
-  const embeddedAssignments =
-    planProcedure.procedureUsers || planProcedure.assignedUsers || planProcedure.users || [];
-
-  return embeddedAssignments
-    .map((assignment) => {
-      const user = assignment.user || assignment.assignedUser || assignment;
-      const userId = assignment.userId || user?.userId || user?.id;
-      const name = user?.name || assignment.userName || assignment.name;
-
-      if (!userId || !name) return null;
-
-      return {
-        assignmentId:
-          assignment.planProcedureUserId ||
-          assignment.planProcedureAssignedUserId ||
-          assignment.procedureAssignmentId ||
-          assignment.id ||
-          null,
-        userId,
-        name,
-      };
-    })
-    .filter(Boolean);
-};
+const getPlanProcedureKey = ({ planId, procedureId }) => `${planId}:${procedureId}`;
 
 const Plan = () => {
   const { id } = useParams();
@@ -61,42 +35,14 @@ const Plan = () => {
 
         if (isCancelled) return;
 
-        const userOptions = loadedUsers.map((user) => ({
-          label: user.name,
-          value: user.userId,
-        }));
-
-        const enrichedPlanProcedures = await Promise.all(
-          loadedPlanProcedures.map(async (planProcedure) => {
-            const embeddedAssignments = getEmbeddedAssignments(planProcedure);
-
-            if (embeddedAssignments.length > 0) {
-              return {
-                ...planProcedure,
-                assignments: embeddedAssignments,
-              };
-            }
-
-            const fetchedAssignments = await getProcedureAssignments(
-              planProcedure.planProcedureId || planProcedure.procedureId
-            );
-
-            return {
-              ...planProcedure,
-              assignments: fetchedAssignments.map((assignment) => ({
-                ...assignment,
-                name:
-                  assignment.name ||
-                  loadedUsers.find((user) => user.userId === assignment.userId)?.name ||
-                  "Unknown user",
-              })),
-            };
-          })
+        setUsers(
+          loadedUsers.map((user) => ({
+            label: user.name,
+            value: user.userId,
+          }))
         );
-
-        setUsers(userOptions);
         setProcedures(loadedProcedures);
-        setPlanProcedures(enrichedPlanProcedures);
+        setPlanProcedures(loadedPlanProcedures);
         setErrorMessage("");
       } catch (error) {
         console.error(error);
@@ -113,10 +59,6 @@ const Plan = () => {
     };
   }, [id]);
 
-  const userLookup = useMemo(
-    () => new Map(users.map((user) => [user.value, user.label])),
-    [users]
-  );
 
   const handleAddProcedureToPlan = async (procedure) => {
     const hasProcedureInPlan = planProcedures.some(
@@ -127,35 +69,7 @@ const Plan = () => {
 
     try {
       await addProcedureToPlan(id, procedure.procedureId);
-      const refreshedPlanProcedures = await getPlanProcedures(id);
-      const addedPlanProcedure =
-        refreshedPlanProcedures.find(
-          (planProcedure) => planProcedure.procedureId === procedure.procedureId
-        ) || {
-          planProcedureId: procedure.procedureId,
-          planId: id,
-          procedureId: procedure.procedureId,
-          procedure: {
-            procedureId: procedure.procedureId,
-            procedureTitle: procedure.procedureTitle,
-          },
-        };
-
-      const cachedAssignments = getStoredAssignmentUserIds(
-        addedPlanProcedure.planProcedureId || addedPlanProcedure.procedureId
-      ).map((userId) => ({
-        assignmentId: null,
-        userId,
-        name: userLookup.get(userId) || "Unknown user",
-      }));
-
-      setPlanProcedures((previousState) => [
-        ...previousState,
-        {
-          ...addedPlanProcedure,
-          assignments: cachedAssignments,
-        },
-      ]);
+      setPlanProcedures(await getPlanProcedures(id));
       setErrorMessage("");
     } catch (error) {
       console.error(error);
@@ -163,7 +77,7 @@ const Plan = () => {
     }
   };
 
-  const handleAssignUsers = async (planProcedureId, nextUsers, previousUsers) => {
+  const handleAssignUsers = async (planProcedure, nextUsers, previousUsers) => {
     try {
       const previousUserIds = new Set(previousUsers.map((user) => user.userId));
       const nextUserIds = new Set(nextUsers.map((user) => user.value));
@@ -172,33 +86,37 @@ const Plan = () => {
 
       const createdAssignments = await Promise.all(
         usersToAdd.map(async (user) => {
-          const assignment = await createProcedureAssignment(planProcedureId, user.value);
+          const assignment = await createProcedureAssignment(
+            planProcedure.planId,
+            planProcedure.procedureId,
+            user.value
+          );
+
           return {
-            assignmentId: assignment.assignmentId,
             userId: user.value,
-            name: user.label,
+            name: assignment.name || user.label,
           };
         })
       );
 
       await Promise.all(
         usersToRemove.map((user) =>
-          deleteProcedureAssignment(planProcedureId, user.assignmentId, user.userId)
+          deleteProcedureAssignment(planProcedure.planId, planProcedure.procedureId, user.userId)
         )
       );
 
       setPlanProcedures((previousState) =>
-        previousState.map((planProcedure) => {
-          if ((planProcedure.planProcedureId || planProcedure.procedureId) !== planProcedureId) {
-            return planProcedure;
+        previousState.map((item) => {
+          if (getPlanProcedureKey(item) !== getPlanProcedureKey(planProcedure)) {
+            return item;
           }
 
-          const remainingAssignments = planProcedure.assignments.filter(
+          const remainingAssignments = item.assignments.filter(
             (assignment) => !usersToRemove.some((user) => user.userId === assignment.userId)
           );
 
           return {
-            ...planProcedure,
+            ...item,
             assignments: [...remainingAssignments, ...createdAssignments],
           };
         })
@@ -210,25 +128,19 @@ const Plan = () => {
     }
   };
 
-  const handleRemoveAssignedUser = async (planProcedureId, assignedUser) => {
+  const handleRemoveAssignedUser = async (planProcedure, assignedUser) => {
     try {
-      await deleteProcedureAssignment(
-        planProcedureId,
-        assignedUser.assignmentId,
-        assignedUser.userId
-      );
+      await deleteProcedureAssignment(planProcedure.planId, planProcedure.procedureId, assignedUser.userId);
 
       setPlanProcedures((previousState) =>
-        previousState.map((planProcedure) => {
-          if ((planProcedure.planProcedureId || planProcedure.procedureId) !== planProcedureId) {
-            return planProcedure;
+        previousState.map((item) => {
+          if (getPlanProcedureKey(item) !== getPlanProcedureKey(planProcedure)) {
+            return item;
           }
 
           return {
-            ...planProcedure,
-            assignments: planProcedure.assignments.filter(
-              (assignment) => assignment.userId !== assignedUser.userId
-            ),
+            ...item,
+            assignments: item.assignments.filter((assignment) => assignment.userId !== assignedUser.userId),
           };
         })
       );
@@ -239,18 +151,14 @@ const Plan = () => {
     }
   };
 
-  const handleClearAssignedUsers = async (planProcedureId) => {
-    const planProcedure = planProcedures.find(
-      (item) => (item.planProcedureId || item.procedureId) === planProcedureId
-    );
-
-    if (!planProcedure || planProcedure.assignments.length === 0) return;
+  const handleClearAssignedUsers = async (planProcedure) => {
+    if (planProcedure.assignments.length === 0) return;
 
     try {
-      await clearProcedureAssignments(planProcedureId, planProcedure.assignments);
+      await clearProcedureAssignments(planProcedure.planId, planProcedure.procedureId);
       setPlanProcedures((previousState) =>
         previousState.map((item) => {
-          if ((item.planProcedureId || item.procedureId) !== planProcedureId) return item;
+          if (getPlanProcedureKey(item) !== getPlanProcedureKey(planProcedure)) return item;
           return {
             ...item,
             assignments: [],
@@ -316,7 +224,7 @@ const Plan = () => {
                         {planProcedures.length > 0 ? (
                           planProcedures.map((planProcedure) => (
                             <PlanProcedureItem
-                              key={planProcedure.planProcedureId || planProcedure.procedureId}
+                              key={getPlanProcedureKey(planProcedure)}
                               planProcedure={planProcedure}
                               users={users}
                               onAssignUsers={handleAssignUsers}
