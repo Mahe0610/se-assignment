@@ -24,14 +24,7 @@ const PlanProcedureItem = ({
               : "No users assigned yet"}
           </div>
         </div>
-        <button
-          type="button"
-          className="btn btn-outline-danger btn-sm"
-          disabled={planProcedure.assignments.length === 0}
-          onClick={() => onClearAssignedUsers(planProcedure)}
-        >
-          Remove All Users
-        </button>
+       
       </div>
 
       <ReactSelect
@@ -56,13 +49,6 @@ const PlanProcedureItem = ({
               className="assigned-user-chip"
             >
               <span>{assignedUser.name}</span>
-              <button
-                type="button"
-                className="btn btn-link btn-sm assigned-user-remove"
-                onClick={() => onRemoveAssignedUser(planProcedure, assignedUser)}
-              >
-                Remove
-              </button>
             </div>
           ))
         ) : (

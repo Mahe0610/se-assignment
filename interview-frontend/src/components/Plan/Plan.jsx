@@ -41,6 +41,7 @@ const Plan = () => {
             value: user.userId,
           }))
         );
+
         setProcedures(loadedProcedures);
         setPlanProcedures(loadedPlanProcedures);
         setErrorMessage("");
@@ -58,7 +59,6 @@ const Plan = () => {
       isCancelled = true;
     };
   }, [id]);
-
 
   const handleAddProcedureToPlan = async (procedure) => {
     const hasProcedureInPlan = planProcedures.some(
@@ -79,10 +79,33 @@ const Plan = () => {
 
   const handleAssignUsers = async (planProcedure, nextUsers, previousUsers) => {
     try {
+      const next = nextUsers || [];
+
       const previousUserIds = new Set(previousUsers.map((user) => user.userId));
-      const nextUserIds = new Set(nextUsers.map((user) => user.value));
-      const usersToAdd = nextUsers.filter((user) => !previousUserIds.has(user.value));
-      const usersToRemove = previousUsers.filter((user) => !nextUserIds.has(user.userId));
+      const nextUserIds = new Set(next.map((user) => user.value));
+
+      const isRemoveAll =
+        previousUsers.length > 1 &&
+        (nextUsers === null || next.length === 0);
+
+      if (isRemoveAll) {
+        await clearProcedureAssignments(
+          planProcedure.planId,
+          planProcedure.procedureId
+        );
+
+        setPlanProcedures((prev) =>
+          prev.map((item) =>
+            getPlanProcedureKey(item) === getPlanProcedureKey(planProcedure)
+              ? { ...item, assignments: [] }
+              : item
+          )
+        );
+
+        return;
+      }
+
+      const usersToAdd = next.filter((u) => !previousUserIds.has(u.value));
 
       const createdAssignments = await Promise.all(
         usersToAdd.map(async (user) => {
@@ -97,6 +120,10 @@ const Plan = () => {
             name: assignment.name || user.label,
           };
         })
+      );
+
+      const usersToRemove = previousUsers.filter(
+        (user) => !nextUserIds.has(user.userId)
       );
 
       await Promise.all(
@@ -121,6 +148,7 @@ const Plan = () => {
           };
         })
       );
+
       setErrorMessage("");
     } catch (error) {
       console.error(error);
@@ -156,93 +184,50 @@ const Plan = () => {
 
     try {
       await clearProcedureAssignments(planProcedure.planId, planProcedure.procedureId);
+
       setPlanProcedures((previousState) =>
-        previousState.map((item) => {
-          if (getPlanProcedureKey(item) !== getPlanProcedureKey(planProcedure)) return item;
-          return {
-            ...item,
-            assignments: [],
-          };
-        })
+        previousState.map((item) =>
+          getPlanProcedureKey(item) === getPlanProcedureKey(planProcedure)
+            ? { ...item, assignments: [] }
+            : item
+        )
       );
+
       setErrorMessage("");
     } catch (error) {
       console.error(error);
-      setErrorMessage("We could not remove all assigned users from that procedure.");
+      setErrorMessage("We could not clear users.");
     }
   };
 
   return (
     <Layout>
       <div className="container pt-4">
-        <div className="d-flex justify-content-center">
-          <h2>OEC Interview Frontend</h2>
-        </div>
         <div className="row mt-4">
-          <div className="col">
-            <div className="card shadow border-0">
-              <h5 className="card-header plan-card-header">Repair Plan</h5>
-              <div className="card-body p-4">
-                {errorMessage ? (
-                  <div className="alert alert-danger" role="alert">
-                    {errorMessage}
-                  </div>
-                ) : null}
-                <div className="row g-4">
-                  <div className="col-lg-5">
-                    <div className="plan-column h-100">
-                      <h4>Procedures</h4>
-                      <p className="text-muted mb-3">
-                        Select the procedures needed to complete the vehicle repair plan.
-                      </p>
-                      <div>
-                        {procedures.map((procedure) => (
-                          <ProcedureItem
-                            key={procedure.procedureId}
-                            procedure={procedure}
-                            handleAddProcedureToPlan={handleAddProcedureToPlan}
-                            planProcedures={planProcedures}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-lg-7">
-                    <div className="plan-column h-100">
-                      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                        <div>
-                          <h4 className="mb-1">Added to Plan</h4>
-                          <p className="text-muted mb-0">
-                            Assign team members, remove individual users, or clear a procedure.
-                          </p>
-                        </div>
-                        <span className="plan-pill">
-                          {planProcedures.length} procedure{planProcedures.length === 1 ? "" : "s"}
-                        </span>
-                      </div>
-                      <div className="d-grid gap-3">
-                        {planProcedures.length > 0 ? (
-                          planProcedures.map((planProcedure) => (
-                            <PlanProcedureItem
-                              key={getPlanProcedureKey(planProcedure)}
-                              planProcedure={planProcedure}
-                              users={users}
-                              onAssignUsers={handleAssignUsers}
-                              onRemoveAssignedUser={handleRemoveAssignedUser}
-                              onClearAssignedUsers={handleClearAssignedUsers}
-                            />
-                          ))
-                        ) : (
-                          <div className="empty-state border rounded-3 p-4 text-center text-muted">
-                            No procedures have been added yet. Choose one from the left to get started.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="col-lg-5">
+            <h4>Procedures</h4>
+            {procedures.map((procedure) => (
+              <ProcedureItem
+                key={procedure.procedureId}
+                procedure={procedure}
+                handleAddProcedureToPlan={handleAddProcedureToPlan}
+                planProcedures={planProcedures}
+              />
+            ))}
+          </div>
+
+          <div className="col-lg-7">
+            <h4>Added to Plan</h4>
+            {planProcedures.map((planProcedure) => (
+              <PlanProcedureItem
+                key={getPlanProcedureKey(planProcedure)}
+                planProcedure={planProcedure}
+                users={users}
+                onAssignUsers={handleAssignUsers}
+                onRemoveAssignedUser={handleRemoveAssignedUser}
+                onClearAssignedUsers={handleClearAssignedUsers}
+              />
+            ))}
           </div>
         </div>
       </div>

@@ -86,13 +86,11 @@ public class PlanProcedureController : ControllerBase
             ppu => ppu.PlanId == request.PlanId && ppu.ProcedureId == request.ProcedureId && ppu.UserId == request.UserId,
             token);
 
-        if (assignment is null)
+        if (assignment != null)
         {
-            return NotFound($"Assignment ({request.PlanId}, {request.ProcedureId}, {request.UserId}) was not found.");
+            _context.PlanProcedureUsers.Remove(assignment);
+            await _context.SaveChangesAsync(token);
         }
-
-        _context.PlanProcedureUsers.Remove(assignment);
-        await _context.SaveChangesAsync(token);
 
         return NoContent();
     }
