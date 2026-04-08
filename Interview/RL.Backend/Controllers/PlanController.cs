@@ -46,4 +46,19 @@ public class PlanController : ControllerBase
 
         return response.ToActionResult();
     }
+
+    [HttpDelete("RemoveProcedureFromPlan")]
+    public async Task<IActionResult> RemoveProcedure(int planId, int procedureId)
+    {
+        var entity = await _context.PlanProcedures
+            .FindAsync(planId, procedureId);
+
+        if (entity != null)
+        {
+            _context.PlanProcedures.Remove(entity);
+            await _context.SaveChangesAsync();
+        }
+
+        return NoContent();
+    }
 }

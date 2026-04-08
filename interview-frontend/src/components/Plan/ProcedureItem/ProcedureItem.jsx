@@ -1,6 +1,6 @@
 import React from "react";
 
-const ProcedureItem = ({ procedure, handleAddProcedureToPlan, planProcedures }) => {
+const ProcedureItem = ({ procedure, handleAddProcedureToPlan,handleRemoveProcedureFromPlan, planProcedures }) => {
     const checkboxId = `procedure-${procedure.procedureId}`;
     const isChecked = planProcedures.some(
         (planProcedure) => planProcedure.procedureId === procedure.procedureId
@@ -15,7 +15,13 @@ const ProcedureItem = ({ procedure, handleAddProcedureToPlan, planProcedures }) 
                     value=""
                     id={checkboxId}
                     checked={isChecked}
-                    onChange={() => handleAddProcedureToPlan(procedure)}
+                    onChange={(e) => {
+                        if (e.target.checked) {
+                            handleAddProcedureToPlan(procedure);
+                        } else {
+                            handleRemoveProcedureFromPlan(procedure);
+                        }
+                    }}
                 />
                 <label className="form-check-label" htmlFor={checkboxId}>
                     {procedure.procedureTitle}

@@ -1,4 +1,4 @@
-const api_url = "http://localhost:10010";
+const api_url = "https://localhost:10011";
 
 const requestJson = async (url, options = {}) => {
     const response = await fetch(url, options);
@@ -113,5 +113,17 @@ export const clearProcedureAssignments = async (planId, procedureId) => {
     url.searchParams.set("procedureId", procedureId);
 
     await requestJson(url.toString(), { method: "DELETE" });
+    return true;
+};
+
+export const removeProcedureFromPlan = async (planId, procedureId) => {
+    const url = new URL(`${api_url}/Plan/RemoveProcedureFromPlan`);
+    url.searchParams.set("planId", Number(planId));
+    url.searchParams.set("procedureId", procedureId);
+
+    await requestJson(url.toString(), {
+        method: "DELETE",
+    });
+
     return true;
 };
